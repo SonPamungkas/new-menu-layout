@@ -75,8 +75,12 @@ namespace NewMenuLayoutMod
                     
                     if (containerRect != null && playerRect != null)
                     {
-                        containerRect.anchoredPosition = new Vector2(containerRect.anchoredPosition.x, containerRect.anchoredPosition.y + 200f);
-                        Logger.LogInfo("Container moved up.");
+                        if (container.GetComponent<ContainerMovedFlag>() == null)
+                        {
+                            containerRect.anchoredPosition = new Vector2(containerRect.anchoredPosition.x, containerRect.anchoredPosition.y + 200f);
+                            container.gameObject.AddComponent<ContainerMovedFlag>();
+                            Logger.LogInfo("Container moved up.");
+                        }
                     }
 
                     // Move LAN buttons into MenuButtonsPanel if they exist
@@ -89,14 +93,14 @@ namespace NewMenuLayoutMod
                         if (startLan != null)
                         {
                             startLan.SetParent(menuBtns, false);
-                            startLan.SetAsFirstSibling();
-                            Logger.LogInfo("Moved StartLanButtonRoot to MenuButtonsPanel top.");
+                            startLan.SetAsLastSibling();
+                            Logger.LogInfo("Moved StartLanButtonRoot to MenuButtonsPanel bottom.");
                         }
                         if (joinLan != null)
                         {
                             joinLan.SetParent(menuBtns, false);
-                            joinLan.SetSiblingIndex(startLan != null ? 1 : 0);
-                            Logger.LogInfo("Moved JoinLanButtonRoot to MenuButtonsPanel top.");
+                            joinLan.SetAsLastSibling();
+                            Logger.LogInfo("Moved JoinLanButtonRoot to MenuButtonsPanel bottom.");
                         }
                     }
                 }
@@ -172,22 +176,27 @@ namespace NewMenuLayoutMod
         {
             Vector2 mousePos = Input.mousePosition;
             bool near = false;
+            
+            bool inScreen = mousePos.x >= 0 && mousePos.x <= Screen.width && mousePos.y >= 0 && mousePos.y <= Screen.height;
 
-            if (area == HoverArea.BottomLeft)
+            if (inScreen)
             {
-                near = (mousePos.x < Screen.width * 0.35f && mousePos.y < Screen.height * 0.35f);
-            }
-            else if (area == HoverArea.BottomCenter)
-            {
-                near = (mousePos.x > Screen.width * 0.25f && mousePos.x < Screen.width * 0.75f && mousePos.y < Screen.height * 0.25f);
-            }
-            else if (area == HoverArea.TopRight)
-            {
-                near = (mousePos.x > Screen.width * 0.65f && mousePos.y > Screen.height * 0.65f);
-            }
-            else if (area == HoverArea.AnyBottom)
-            {
-                near = (mousePos.y < Screen.height * 0.3f);
+                if (area == HoverArea.BottomLeft)
+                {
+                    near = (mousePos.x < Screen.width * 0.35f && mousePos.y < Screen.height * 0.35f);
+                }
+                else if (area == HoverArea.BottomCenter)
+                {
+                    near = (mousePos.x > Screen.width * 0.25f && mousePos.x < Screen.width * 0.75f && mousePos.y < Screen.height * 0.25f);
+                }
+                else if (area == HoverArea.TopRight)
+                {
+                    near = (mousePos.x > Screen.width * 0.65f && mousePos.y > Screen.height * 0.65f);
+                }
+                else if (area == HoverArea.AnyBottom)
+                {
+                    near = (mousePos.y < Screen.height * 0.3f);
+                }
             }
 
             isHidden = !near;
@@ -195,5 +204,9 @@ namespace NewMenuLayoutMod
             Vector2 targetPos = isHidden ? hiddenPos : originalPos;
             rect.anchoredPosition = Vector2.Lerp(rect.anchoredPosition, targetPos, Time.deltaTime * transitionSpeed);
         }
+    }
+
+    public class ContainerMovedFlag : MonoBehaviour
+    {
     }
 }
