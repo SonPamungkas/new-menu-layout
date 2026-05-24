@@ -45,10 +45,7 @@
     </ItemGroup>
 
     <Target Name="PostBuild" AfterTargets="Build" Condition="'$(ModDestination)' != ''">
-        <CreateItem Include="$(OutDir)*.dll">
-            <Output TaskParameter="Include" ItemName="DllFiles" />
-        </CreateItem>
-        <Message Text="Copying build output assemblies from $(OutDir)*.dll to $(ModDestination)\$(AssemblyName)" Importance="high" />
-        <Copy SourceFiles="@(DllFiles)" DestinationFolder="$(ModDestination)\$(AssemblyName)" />
+        <Message Text="Copying $(TargetFileName) directly to $(ModDestination)" Importance="high" />
+        <Copy SourceFiles="$(TargetPath)" DestinationFolder="$(ModDestination)" />
     </Target>
 </Project>

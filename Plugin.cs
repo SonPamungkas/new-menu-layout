@@ -4,49 +4,54 @@ using System.Collections.Generic;
 using System.Linq;
 using BepInEx;
 using BepInEx.Logging;
-using HarmonyLib;
 using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.SceneManagement;
 using UnityEngine.EventSystems;
+using UnityEngine.EventSystems;
 
 namespace NewMenuLayoutMod
 {
-    [BepInPlugin(PluginGuid, PluginName, PluginVersion)]
+    [BepInPlugin("com.newmenulayout", "New Menu Layout", "1.0.0")]
     public class Plugin : BaseUnityPlugin
     {
-        public const string PluginGuid = "com.newmenulayoutmod";
-        public const string PluginName = "New Menu Layout";
-        public const string PluginVersion = "1.0.0";
-
-        public static Plugin Instance { get; private set; }
-        internal new ManualLogSource Logger;
-        private Harmony _harmony;
+        internal static new ManualLogSource Logger;
 
         private void Awake()
         {
-            Instance = this;
             Logger = base.Logger;
-            _harmony = new Harmony(PluginGuid);
-            _harmony.PatchAll();
+            Logger.LogInfo($"Plugin {PluginInfo.PLUGIN_GUID} is loaded!");
 
-            Logger.LogInfo($"Plugin {PluginGuid} is loaded!");
+            SceneManager.sceneLoaded += OnSceneLoaded;
         }
 
-        public IEnumerator ApplyMenuChangesRoutine(MainMenu mainMenu)
+        private void OnSceneLoaded(Scene scene, LoadSceneMode mode)
         {
-            // Wait to ensure all UI elements (and other mods like JoinLanButton) are fully loaded
+            Logger.LogInfo($"Scene loaded: {scene.name} (Index: {scene.buildIndex})");
+            StartCoroutine(ApplyMenuChangesRoutine());
+        }
+
+        private IEnumerator ApplyMenuChangesRoutine()
+        {
+            // Wait a little bit for UI to be fully built
             yield return new WaitForSeconds(1f);
 
-            Transform uiRoot = mainMenu.transform.root;
-            Transform mainCanvas = uiRoot.Find("MainCanvas");
-
-            if (mainCanvas == null)
+            bool applied = false;
+            foreach (var canvas in FindObjectsOfType<Canvas>())
             {
-                mainCanvas = mainMenu.transform;
+                if (canvas.rootCanvas == canvas && canvas.name == "MainCanvas")
+                {
+                    Logger.LogInfo($"Found Root Canvas: {canvas.name}, applying mod...");
+                    ApplyModToCanvas(canvas.transform);
+                    applied = true;
+                }
             }
+        }
 
-            Transform leftPanel = mainCanvas.Find("Prejoin menu/LeftPanel");
+        private void ApplyModToCanvas(Transform mainCanvas)
+        {
+            // Find LeftPanel
+            Transform leftPanel = RecursiveFind(mainCanvas, "LeftPanel");
             if (leftPanel != null)
             {
                 var img = leftPanel.GetComponent<Image>();
@@ -57,6 +62,7 @@ namespace NewMenuLayoutMod
                     Logger.LogInfo("LeftPanel opacity set to 0.");
                 }
 
+                // Try to find Container and playerNameInput
                 Transform container = leftPanel.Find("Container");
                 Transform playerNameInput = leftPanel.Find("playerNameInput");
                 if (container != null && playerNameInput != null)
@@ -73,6 +79,7 @@ namespace NewMenuLayoutMod
                         Logger.LogInfo("Container moved up.");
                     }
 
+                    // Move LAN buttons into MenuButtonsPanel if they exist
                     Transform startLan = leftPanel.Find("StartLanButtonRoot");
                     Transform joinLan = leftPanel.Find("JoinLanButtonRoot");
                     Transform menuBtns = container.Find("MenuButtonsPanel");
@@ -95,7 +102,8 @@ namespace NewMenuLayoutMod
                 }
             }
 
-            Transform newsPanel = mainCanvas.Find("NewsPanel");
+            // Find NewsPanel
+            Transform newsPanel = RecursiveFind(mainCanvas, "NewsPanel");
             if (newsPanel != null)
             {
                 var h = newsPanel.gameObject.GetComponent<HoverHideComponent>();
@@ -105,37 +113,38 @@ namespace NewMenuLayoutMod
                 Logger.LogInfo("HoverHideComponent added to NewsPanel.");
             }
 
-            Transform newLogo = mainCanvas.Find("Prejoin menu/NewLogo");
+            // Find NewLogo
+            Transform newLogo = RecursiveFind(mainCanvas, "NewLogo");
             if (newLogo != null)
             {
                 var h = newLogo.gameObject.GetComponent<HoverHideComponent>();
                 if (h == null) h = newLogo.gameObject.AddComponent<HoverHideComponent>();
                 h.area = HoverHideComponent.HoverArea.TopRight;
-                h.hideOffset = new Vector2(0, 300f);
+                h.hideOffset = new Vector2(0, 300f); // Hide to the top
                 Logger.LogInfo("HoverHideComponent added to NewLogo.");
             }
 
-            Transform hintPanel = mainCanvas.Find("HintPanel");
+            // Find HintPanel
+            Transform hintPanel = RecursiveFind(mainCanvas, "HintPanel");
             if (hintPanel != null)
             {
                 var h = hintPanel.gameObject.GetComponent<HoverHideComponent>();
                 if (h == null) h = hintPanel.gameObject.AddComponent<HoverHideComponent>();
                 h.area = HoverHideComponent.HoverArea.BottomCenter;
-                h.hideOffset = new Vector2(0, -300f);
+                h.hideOffset = new Vector2(0, -300f); // Hide down
                 Logger.LogInfo("HoverHideComponent added to HintPanel.");
             }
         }
-    }
 
-    [HarmonyPatch(typeof(MainMenu), "Start")]
-    internal static class MainMenuStartPatch
-    {
-        private static void Postfix(MainMenu __instance)
+        private Transform RecursiveFind(Transform parent, string name)
         {
-            if (Plugin.Instance != null)
+            if (parent.name == name) return parent;
+            for (int i = 0; i < parent.childCount; i++)
             {
-                Plugin.Instance.StartCoroutine(Plugin.Instance.ApplyMenuChangesRoutine(__instance));
+                var result = RecursiveFind(parent.GetChild(i), name);
+                if (result != null) return result;
             }
+            return null;
         }
     }
 
