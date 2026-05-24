@@ -1,0 +1,54 @@
+<Project Sdk="Microsoft.NET.Sdk">
+    <PropertyGroup>
+        <NUCLEAR_OPTION_SERVER_REFERENCES>C:\Program Files\Steam\steamapps\common\Nuclear Option\NuclearOption_Data\Managed</NUCLEAR_OPTION_SERVER_REFERENCES>
+        <TargetFramework>netstandard2.1</TargetFramework>
+        <AssemblyName>NewMenuLayoutMod</AssemblyName>
+        <RootNamespace>NewMenuLayoutMod</RootNamespace>
+        <PackageId>NewMenuLayoutMod</PackageId>
+        <Title>NewMenuLayoutMod</Title>
+        <Description>A mod to change the main menu layout.</Description>
+        <Version>1.0.0</Version>
+        <Authors>SonPamungkas</Authors>
+        <PackageTags>nuclear;option;bepinex;mod</PackageTags>
+
+        <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+        <LangVersion>latest</LangVersion>
+        <Nullable>enable</Nullable>
+
+        <RestoreAdditionalProjectSources>
+            https://api.nuget.org/v3/index.json;
+            https://nuget.bepinex.dev/v3/index.json
+        </RestoreAdditionalProjectSources>
+
+        <NoWarn>$(NoWarn);CS0436</NoWarn>
+        <ModDestination>$(NUCLEAR_OPTION_SERVER_REFERENCES)\..\..\BepInEx\plugins</ModDestination>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <PackageReference Include="BepInEx.AssemblyPublicizer.MSBuild" Version="0.4.3" PrivateAssets="all" ExcludeAssets="runtime" />
+        <PackageReference Include="BepInEx.Analyzers" Version="1.*" PrivateAssets="all" />
+        <PackageReference Include="BepInEx.Core" Version="5.*" />
+        <PackageReference Include="BepInEx.PluginInfoProps" Version="1.*" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <Reference Include="Assembly-CSharp" HintPath="$(NUCLEAR_OPTION_SERVER_REFERENCES)\Assembly-CSharp.dll" Private="False" Publicize="True">
+            <Aliases>global,NuclearOption</Aliases>
+        </Reference>
+        <Reference Include="Assembly-CSharp-firstpass" HintPath="$(NUCLEAR_OPTION_SERVER_REFERENCES)\Assembly-CSharp-firstpass.dll" Private="False" Publicize="True" />
+        <Reference Include="UnityEngine" HintPath="$(NUCLEAR_OPTION_SERVER_REFERENCES)\UnityEngine.dll" Private="False" Publicize="True" />
+        <Reference Include="UnityEngine.CoreModule" HintPath="$(NUCLEAR_OPTION_SERVER_REFERENCES)\UnityEngine.CoreModule.dll" Private="False" Publicize="True" />
+        <Reference Include="UnityEngine.UI" HintPath="$(NUCLEAR_OPTION_SERVER_REFERENCES)\UnityEngine.UI.dll" Private="False" Publicize="True" />
+        <Reference Include="UnityEngine.UIModule" HintPath="$(NUCLEAR_OPTION_SERVER_REFERENCES)\UnityEngine.UIModule.dll" Private="False" Publicize="True" />
+        <Reference Include="UnityEngine.AnimationModule" HintPath="$(NUCLEAR_OPTION_SERVER_REFERENCES)\UnityEngine.AnimationModule.dll" Private="False" Publicize="True" />
+        <Reference Include="UnityEngine.InputLegacyModule" HintPath="$(NUCLEAR_OPTION_SERVER_REFERENCES)\UnityEngine.InputLegacyModule.dll" Private="False" Publicize="True" />
+    </ItemGroup>
+
+    <Target Name="PostBuild" AfterTargets="Build" Condition="'$(ModDestination)' != ''">
+        <CreateItem Include="$(OutDir)*.dll">
+            <Output TaskParameter="Include" ItemName="DllFiles" />
+        </CreateItem>
+        <Message Text="Copying build output assemblies from $(OutDir)*.dll to $(ModDestination)\$(AssemblyName)" Importance="high" />
+        <Copy SourceFiles="@(DllFiles)" DestinationFolder="$(ModDestination)\$(AssemblyName)" />
+    </Target>
+</Project>
