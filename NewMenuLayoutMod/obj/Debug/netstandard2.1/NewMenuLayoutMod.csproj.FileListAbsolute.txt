@@ -1,0 +1,12 @@
+c:\Users\RaksaPutra Architect\Documents\modding\new-menu-layout\NewMenuLayoutMod\bin\Debug\netstandard2.1\NewMenuLayoutMod.deps.json
+c:\Users\RaksaPutra Architect\Documents\modding\new-menu-layout\NewMenuLayoutMod\bin\Debug\netstandard2.1\NewMenuLayoutMod.dll
+c:\Users\RaksaPutra Architect\Documents\modding\new-menu-layout\NewMenuLayoutMod\bin\Debug\netstandard2.1\NewMenuLayoutMod.pdb
+c:\Users\RaksaPutra Architect\Documents\modding\new-menu-layout\NewMenuLayoutMod\obj\Debug\netstandard2.1\NewMenuLayoutMod.csproj.AssemblyReference.cache
+c:\Users\RaksaPutra Architect\Documents\modding\new-menu-layout\NewMenuLayoutMod\obj\Debug\netstandard2.1\NewMenuLayoutMod.IgnoresAccessChecksTo.cs
+c:\Users\RaksaPutra Architect\Documents\modding\new-menu-layout\NewMenuLayoutMod\obj\Debug\netstandard2.1\PluginInfo.cs
+c:\Users\RaksaPutra Architect\Documents\modding\new-menu-layout\NewMenuLayoutMod\obj\Debug\netstandard2.1\NewMenuLayoutMod.GeneratedMSBuildEditorConfig.editorconfig
+c:\Users\RaksaPutra Architect\Documents\modding\new-menu-layout\NewMenuLayoutMod\obj\Debug\netstandard2.1\NewMenuLayoutMod.AssemblyInfoInputs.cache
+c:\Users\RaksaPutra Architect\Documents\modding\new-menu-layout\NewMenuLayoutMod\obj\Debug\netstandard2.1\NewMenuLayoutMod.AssemblyInfo.cs
+c:\Users\RaksaPutra Architect\Documents\modding\new-menu-layout\NewMenuLayoutMod\obj\Debug\netstandard2.1\NewMenuLayoutMod.csproj.CoreCompileInputs.cache
+c:\Users\RaksaPutra Architect\Documents\modding\new-menu-layout\NewMenuLayoutMod\obj\Debug\netstandard2.1\NewMenuLayoutMod.dll
+c:\Users\RaksaPutra Architect\Documents\modding\new-menu-layout\NewMenuLayoutMod\obj\Debug\netstandard2.1\NewMenuLayoutMod.pdb

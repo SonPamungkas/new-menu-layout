@@ -1,0 +1,8 @@
+c:\Users\RaksaPutra Architect\Documents\modding\new-menu-layout\Image-Replacer\bin\Debug\netstandard2.1\MainMenuReplacer.deps.json
+c:\Users\RaksaPutra Architect\Documents\modding\new-menu-layout\Image-Replacer\bin\Debug\netstandard2.1\MainMenuReplacer.dll
+c:\Users\RaksaPutra Architect\Documents\modding\new-menu-layout\Image-Replacer\bin\Debug\netstandard2.1\MainMenuReplacer.pdb
+c:\Users\RaksaPutra Architect\Documents\modding\new-menu-layout\Image-Replacer\obj\Debug\netstandard2.1\MainMenuReplacer.csproj.AssemblyReference.cache
+c:\Users\RaksaPutra Architect\Documents\modding\new-menu-layout\Image-Replacer\obj\Debug\netstandard2.1\MainMenuReplacer.GeneratedMSBuildEditorConfig.editorconfig
+c:\Users\RaksaPutra Architect\Documents\modding\new-menu-layout\Image-Replacer\obj\Debug\netstandard2.1\MainMenuReplacer.csproj.CoreCompileInputs.cache
+c:\Users\RaksaPutra Architect\Documents\modding\new-menu-layout\Image-Replacer\obj\Debug\netstandard2.1\MainMenuReplacer.dll
+c:\Users\RaksaPutra Architect\Documents\modding\new-menu-layout\Image-Replacer\obj\Debug\netstandard2.1\MainMenuReplacer.pdb
