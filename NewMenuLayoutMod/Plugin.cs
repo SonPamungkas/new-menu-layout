@@ -12,7 +12,7 @@ using UnityEngine.Video;
 
 namespace NewMenuLayoutMod
 {
-    [BepInPlugin("com.newmenulayout", "New Menu Layout", "1.0.0")]
+    [BepInPlugin("com.newmenulayout", "New Menu Layout", "1.2.0")]
     public class Plugin : BaseUnityPlugin
     {
         internal static new ManualLogSource Logger;
@@ -32,89 +32,39 @@ namespace NewMenuLayoutMod
         private static GameObject mpCanvas;
         private static Texture videoTexture;
         private static readonly HashSet<Transform> processedTransforms = new HashSet<Transform>();
-        private static readonly HashSet<int> movedContainers = new HashSet<int>();
 
         private void OnSceneLoaded(Scene scene, LoadSceneMode mode)
         {
             Logger.LogInfo($"Scene loaded: {scene.name} (Index: {scene.buildIndex})");
-            sceneLoadedTime = Time.time;
             processedTransforms.Clear();
-            
-            // Ensure all three canvases are fully active and pre-generated
-            if (persistentBackgroundCanvas != null) persistentBackgroundCanvas.SetActive(true);
-            if (spCanvas != null) spCanvas.SetActive(true);
-            if (mpCanvas != null) mpCanvas.SetActive(true);
+
+            string sceneName = scene.name.ToLower();
+            bool isMenuScene = sceneName.Contains("menu") || 
+                               sceneName.Contains("singleplayer") || 
+                               sceneName.Contains("multiplayer") ||
+                               sceneName.Contains("lobby") ||
+                               sceneName.Contains("workshop");
+
+            if (!isMenuScene)
+            {
+                if (persistentBackgroundCanvas != null) Destroy(persistentBackgroundCanvas);
+                if (spCanvas != null) Destroy(spCanvas);
+                if (mpCanvas != null) Destroy(mpCanvas);
+            }
+            else
+            {
+                // Ensure all three canvases are fully active and pre-generated
+                if (persistentBackgroundCanvas != null) persistentBackgroundCanvas.SetActive(true);
+                if (spCanvas != null) spCanvas.SetActive(true);
+                if (mpCanvas != null) mpCanvas.SetActive(true);
+            }
 
             // Synchronously hide native backgrounds immediately to prevent transition blips
             HideAllNativeBackgroundsImmediately();
 
             StartCoroutine(ApplyMenuChangesRoutine());
             StartCoroutine(MoveLanButtonsRoutine());
-        }
-
-        private void ProcessBackgroundTransform(Transform t)
-        {
-            if (t == null || t.gameObject == originalBackgroundReference || t.name == "MMR_EverywhereVideo") return;
-
-            try
-            {
-                if (IsEverywhereEnabled() && videoTexture != null)
-                {
-                    // Do NOT disable the original Image or RawImage, as it breaks Raycast targets (softlock)
-                    var rawImgComp = t.GetComponent<RawImage>();
-                    if (rawImgComp != null && rawImgComp.gameObject.name.IndexOf("background", StringComparison.OrdinalIgnoreCase) >= 0)
-                    {
-                        rawImgComp.texture = videoTexture;
-                        rawImgComp.color = Color.white;
-                        rawImgComp.enabled = true;
-                    }
-                    else
-                    {
-                        var childTrans = t.Find("MMR_EverywhereVideo");
-                        GameObject childGo = childTrans != null ? childTrans.gameObject : new GameObject("MMR_EverywhereVideo");
-                        if (childTrans == null)
-                        {
-                            childGo.transform.SetParent(t, false);
-                            var rt = childGo.AddComponent<RectTransform>();
-                            rt.anchorMin = Vector2.zero;
-                            rt.anchorMax = Vector2.one;
-                            rt.offsetMin = Vector2.zero;
-                            rt.offsetMax = Vector2.zero;
-                            childGo.transform.SetAsFirstSibling();
-                        }
-
-                        var rawImg = childGo.GetComponent<RawImage>() ?? childGo.AddComponent<RawImage>();
-                        rawImg.texture = videoTexture;
-                        rawImg.color = Color.white;
-                        rawImg.raycastTarget = false; // CRITICAL: prevent softlock!
-                        rawImg.enabled = true;
-
-                        var le = childGo.GetComponent<LayoutElement>() ?? childGo.AddComponent<LayoutElement>();
-                        le.ignoreLayout = true;
-
-                        childGo.SetActive(true);
-                    }
-                }
-                else
-                {
-                    // Regular mode: we hide the backgrounds so the persistent video shows through
-                    if (t.name.IndexOf("background", StringComparison.OrdinalIgnoreCase) >= 0 || t.name.IndexOf("Background", StringComparison.OrdinalIgnoreCase) >= 0)
-                    {
-                        var img = t.GetComponent<Image>();
-                        if (img != null) img.enabled = false;
-
-                        var rawImg = t.GetComponent<RawImage>();
-                        if (rawImg != null) rawImg.enabled = false;
-                    }
-
-                    var childTrans = t.Find("MMR_EverywhereVideo");
-                    if (childTrans != null) childTrans.gameObject.SetActive(false);
-                }
-            }
-            catch (Exception ex)
-            {
-                Logger.LogError($"Error processing background transform {t.name}: {ex.Message}");
-            }
+            StartCoroutine(SyncBackgroundsRoutine());
         }
 
         private void HideAllNativeBackgroundsImmediately()
@@ -128,15 +78,18 @@ namespace NewMenuLayoutMod
                     continue;
                 }
 
-                // Hide/Stream the main "background" inside ANY native canvas
+                // Hide the main "background" inside ANY native canvas
                 Transform bg = RecursiveFind(canvas.transform, "background");
                 if (bg != null && bg.gameObject != originalBackgroundReference)
                 {
-                    ProcessBackgroundTransform(bg);
-                    Logger.LogInfo($"Immediately processed native background in canvas: {canvas.name}");
+                    var img = bg.GetComponent<Image>();
+                    if (img != null) img.enabled = false;
+                    var rawImg = bg.GetComponent<RawImage>();
+                    if (rawImg != null) rawImg.enabled = false;
+                    Logger.LogInfo($"Immediately disabled native background in canvas: {canvas.name}");
                 }
 
-                // Also hide/stream other major backgrounds
+                // Also hide other major backgrounds
                 HideMajorBackgroundsRecursive(canvas.transform);
             }
         }
@@ -145,23 +98,19 @@ namespace NewMenuLayoutMod
         {
             if (t == null) return;
             string name = t.name;
-
-            bool shouldProcess = false;
-
             bool isMajorBackground = name.IndexOf("Background", StringComparison.OrdinalIgnoreCase) >= 0;
+
             if (isMajorBackground && t.gameObject != originalBackgroundReference)
             {
                 var rt = t.GetComponent<RectTransform>();
                 if (rt != null && rt.rect.width > 300f && rt.rect.height > 300f)
                 {
-                    shouldProcess = true;
+                    var img = t.GetComponent<Image>();
+                    if (img != null) img.enabled = false;
+                    var rawImg = t.GetComponent<RawImage>();
+                    if (rawImg != null) rawImg.enabled = false;
+                    Logger.LogInfo($"Immediately disabled major native background: {name}");
                 }
-            }
-
-            if (shouldProcess && t.gameObject != originalBackgroundReference)
-            {
-                ProcessBackgroundTransform(t);
-                Logger.LogInfo($"Immediately processed native background: {name}");
             }
 
             for (int i = 0; i < t.childCount; i++)
@@ -222,68 +171,62 @@ namespace NewMenuLayoutMod
                 rawImg.enabled = false; // Prevent whiteout until texture is assigned
             }
 
-            // Stretch to fill
+            // Fix stretch anchors so AspectRatioFitter works
             RectTransform rt = bgGo.GetComponent<RectTransform>();
             if (rt != null)
             {
-                rt.anchorMin = Vector2.zero;
-                rt.anchorMax = Vector2.one;
+                rt.anchorMin = new Vector2(0.5f, 0.5f);
+                rt.anchorMax = new Vector2(0.5f, 0.5f);
+                rt.pivot = new Vector2(0.5f, 0.5f);
                 rt.offsetMin = Vector2.zero;
                 rt.offsetMax = Vector2.zero;
             }
 
+            var fitter = bgGo.AddComponent<AspectRatioFitter>();
+            fitter.aspectMode = AspectRatioFitter.AspectMode.FitInParent;
+            fitter.aspectRatio = 1920f / 1080f;
+
             canvasRef.SetActive(true);
         }
 
-        private float sceneLoadedTime = 0f;
-        private float lastScanTime = 0f;
-
-        private void Update()
+        private IEnumerator SyncBackgroundsRoutine()
         {
-            // Force active video players to play reactively (only on persistent original canvas)
-            ForcePlayInCanvas(persistentBackgroundCanvas);
-
-            // Fetch/Sync texture from original background using GetComponentInChildren
-            if (originalBackgroundReference != null)
+            float startTime = Time.time;
+            while (Time.time - startTime < 2.0f)
             {
-                Texture currentTex = null;
-                var rawImg = originalBackgroundReference.GetComponentInChildren<RawImage>();
-                if (rawImg != null && rawImg.texture != null)
+                // Force active video players to play reactively (only on persistent original canvas)
+                ForcePlayInCanvas(persistentBackgroundCanvas);
+
+                // Fetch/Sync texture from original background using GetComponentInChildren
+                if (originalBackgroundReference != null)
                 {
-                    currentTex = rawImg.texture;
-                }
-                else
-                {
-                    var vp = originalBackgroundReference.GetComponentInChildren<VideoPlayer>();
-                    if (vp != null && vp.targetTexture != null)
+                    Texture currentTex = null;
+                    var rawImg = originalBackgroundReference.GetComponentInChildren<RawImage>();
+                    if (rawImg != null && rawImg.texture != null)
                     {
-                        currentTex = vp.targetTexture;
+                        currentTex = rawImg.texture;
+                    }
+                    else
+                    {
+                        var vp = originalBackgroundReference.GetComponentInChildren<VideoPlayer>();
+                        if (vp != null && vp.targetTexture != null)
+                        {
+                            currentTex = vp.targetTexture;
+                        }
+                    }
+
+                    if (currentTex != null && videoTexture != currentTex)
+                    {
+                        videoTexture = currentTex;
+                        Logger.LogInfo($"Detected new video/image texture: {videoTexture.name}. Updating canvases...");
+                        AssignTextureToCanvasRawImage(spCanvas, force: true);
+                        AssignTextureToCanvasRawImage(mpCanvas, force: true);
                     }
                 }
 
-                if (currentTex != null && videoTexture != currentTex)
-                {
-                    videoTexture = currentTex;
-                    Logger.LogInfo($"Detected new video/image texture: {videoTexture.name}. Updating canvases...");
-                    AssignTextureToCanvasRawImage(spCanvas, force: true);
-                    AssignTextureToCanvasRawImage(mpCanvas, force: true);
-                }
-            }
-
-            // Dynamically assign videoTexture once it becomes available
-            AssignTextureToCanvasRawImage(spCanvas);
-            AssignTextureToCanvasRawImage(mpCanvas);
-
-            // Apply texture replacement on major backgrounds to resolve any layering issues.
-            float timeSinceLoad = Time.time - sceneLoadedTime;
-            // Heavily throttle FindObjectsOfType to fix slow startup lag!
-            // First 2 seconds: scan every 0.25s. After that: scan every 1.0s.
-            float scanInterval = (timeSinceLoad < 2.0f) ? 0.25f : 1.0f;
-            bool shouldScan = (Time.time - lastScanTime >= scanInterval);
-
-            if (shouldScan)
-            {
-                lastScanTime = Time.time;
+                // Dynamically assign videoTexture once it becomes available
+                AssignTextureToCanvasRawImage(spCanvas);
+                AssignTextureToCanvasRawImage(mpCanvas);
 
                 foreach (var canvas in FindObjectsOfType<Canvas>())
                 {
@@ -295,6 +238,8 @@ namespace NewMenuLayoutMod
                     }
                     ApplyVideoToTargetBackground(canvas.transform);
                 }
+
+                yield return new WaitForSeconds(0.05f);
             }
         }
 
@@ -326,7 +271,7 @@ namespace NewMenuLayoutMod
 
         private void ApplyVideoToTargetBackground(Transform t)
         {
-            if (t == null || t.name == "MMR_EverywhereVideo") return;
+            if (t == null) return;
 
             if (processedTransforms.Contains(t))
             {
@@ -339,58 +284,63 @@ namespace NewMenuLayoutMod
             }
 
             string name = t.name;
-            bool everywhere = IsEverywhereEnabled();
-            bool shouldProcess = false;
+            // Case-insensitive substring matching for robust detection
+            bool isMajorBackground = name.IndexOf("Background", StringComparison.OrdinalIgnoreCase) >= 0;
 
-            if (everywhere)
+            if (isMajorBackground && t.gameObject.activeInHierarchy)
             {
                 var rt = t.GetComponent<RectTransform>();
-                if (rt != null && rt.rect.width > 20f && rt.rect.height > 20f)
+                if (rt != null && rt.rect.width > 300f && rt.rect.height > 300f)
                 {
-                    bool hasGraphic = false;
-                    var img = t.GetComponent<Image>();
-                    var raw = t.GetComponent<RawImage>();
-                    if (img != null && img.color.a > 0.01f) hasGraphic = true;
-                    if (raw != null && raw.color.a > 0.01f) hasGraphic = true;
-
-                    if (hasGraphic)
+                    if (t.GetComponent<VideoBackgroundAppliedFlag>() == null)
                     {
-                        string lowerName = name.ToLower();
-                        // Only blacklist transparent fade overlays and blockers
-                        bool isBlacklisted = lowerName.Contains("fade") ||
-                                             lowerName.Contains("overlay") ||
-                                             lowerName.Contains("blocker") ||
-                                             lowerName.Contains("border") ||
-                                             lowerName.Contains("masker") ||
-                                             lowerName.Contains("outline");
-
-                        if (!isBlacklisted)
+                        try
                         {
-                            shouldProcess = true;
+                            var img = t.GetComponent<Image>();
+                            if (img != null) img.enabled = false;
+
+                            var rawImg = t.GetComponent<RawImage>();
+                            if (rawImg != null) rawImg.enabled = false;
+
+                            t.gameObject.AddComponent<VideoBackgroundAppliedFlag>();
+                            Logger.LogInfo($"Disabled native background to let seamless video canvas show through: {t.name}");
+                        }
+                        catch (Exception ex)
+                        {
+                            Logger.LogError($"Error disabling native background on {t.name}: {ex.Message}");
                         }
                     }
                 }
             }
-            else
-            {
-                bool isMajorBackground = name.IndexOf("Background", StringComparison.OrdinalIgnoreCase) >= 0;
-                if (isMajorBackground && t.gameObject.activeInHierarchy)
-                {
-                    var rt = t.GetComponent<RectTransform>();
-                    if (rt != null && rt.rect.width > 300f && rt.rect.height > 300f)
-                    {
-                        shouldProcess = true;
-                    }
-                }
-            }
 
-            if (shouldProcess)
+            // Hardcoded Workshop opacities
+            if (t.GetComponent<VideoBackgroundAppliedFlag>() == null)
             {
-                if (t.GetComponent<VideoBackgroundAppliedFlag>() == null)
+                bool handled = false;
+                if (name == "Header" && t.parent != null && t.parent.name == "Panel")
                 {
-                    ProcessBackgroundTransform(t);
+                    var img = t.GetComponent<Image>(); if (img != null) { img.color = new Color(img.color.r, img.color.g, img.color.b, 0.70f); handled = true; }
+                }
+                else if (name == "Main Panel" && t.parent != null && t.parent.name == "Panel")
+                {
+                    var img = t.GetComponent<Image>(); if (img != null) { img.color = new Color(img.color.r, img.color.g, img.color.b, 0f); handled = true; }
+                }
+                else if (name == "Tabs" && t.parent != null && t.parent.name == "Workshop List panel")
+                {
+                    var img = t.GetComponent<Image>(); if (img != null) { img.color = new Color(img.color.r, img.color.g, img.color.b, 0.30f); handled = true; }
+                }
+                else if (name == "Scroll View" && t.parent != null && t.parent.name == "Workshop List panel")
+                {
+                    var img = t.GetComponent<Image>(); if (img != null) { img.color = new Color(img.color.r, img.color.g, img.color.b, 0.05f); handled = true; }
+                }
+                else if (name == "Button Panel" && t.parent != null && t.parent.name == "Panel")
+                {
+                    var img = t.GetComponent<Image>(); if (img != null) { img.color = new Color(img.color.r, img.color.g, img.color.b, 0.90f); handled = true; }
+                }
+
+                if (handled)
+                {
                     t.gameObject.AddComponent<VideoBackgroundAppliedFlag>();
-                    Logger.LogInfo($"Processed native background to let seamless video show through: {t.name}");
                 }
             }
 
@@ -617,30 +567,6 @@ namespace NewMenuLayoutMod
             catch (Exception ex)
             {
                 Logger.LogError($"Error sanitizing background: {ex.Message}");
-            }
-        }
-
-        private bool IsEverywhereEnabled()
-        {
-            try
-            {
-                var replacerType = Type.GetType("MainMenuReplacerMod.MainMenuReplacer, MainMenuReplacer");
-                if (replacerType == null) return false;
-                
-                var instanceField = replacerType.GetField("Instance", System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic);
-                var instance = instanceField?.GetValue(null);
-                if (instance == null) return false;
-
-                var everywhereField = replacerType.GetField("cfgEverywhere", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Public);
-                var configEntry = everywhereField?.GetValue(instance);
-                if (configEntry == null) return false;
-
-                var valueProp = configEntry.GetType().GetProperty("Value");
-                return (bool)(valueProp?.GetValue(configEntry) ?? false);
-            }
-            catch
-            {
-                return false;
             }
         }
 

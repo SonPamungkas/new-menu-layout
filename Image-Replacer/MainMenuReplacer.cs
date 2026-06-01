@@ -15,7 +15,7 @@ using UnityEngine.Audio;
 
 namespace MainMenuReplacerMod
 {
-    [BepInPlugin("com.neutralobserver.mainmenureplacer", "MainMenu Replacer", "1.1")] //permanent
+    [BepInPlugin("com.neutralobserver.mainmenureplacer", "MainMenu Replacer", "1.2")] //permanent
     public class MainMenuReplacer : BaseUnityPlugin
     {
         internal static MainMenuReplacer Instance;
@@ -53,7 +53,9 @@ namespace MainMenuReplacerMod
         private bool _isPlayingVideo = false;
 
         private readonly List<RawImage> _cachedBackgroundRawImages = new List<RawImage>();
-        private float _lastRawImageScanTime = 0f;
+        private string _currentMenuMediaPath = null;
+        private bool _isMenuSessionActive = false;
+        private AudioSource _vanillaMenuMusic;
 
         // Media items
         private class MediaItem
@@ -160,52 +162,13 @@ namespace MainMenuReplacerMod
                 {
                     float volume = cfgMenuVideoMute.Value ? 0f : (ResolveMusicVolume01() * Mathf.Clamp(cfgMenuVideoVolumeMultiplier.Value, 0f, 2f));
                     _menuVideoAudioSource.volume = volume;
-                }
 
-                // Continuously stream video texture to other canvases (SPcanvas and MPcanvas) to prevent blanks or static images
-                if (_menuVideoPlayer.targetTexture != null)
-                {
-                    StreamToOtherCanvases(_menuVideoPlayer.targetTexture);
-                }
-            }
-        }
-
-        private void StreamToOtherCanvases(RenderTexture tex)
-        {
-            if (tex == null) return;
-            try
-            {
-                // Refresh the cache once per second, or if it is empty
-                if (Time.time - _lastRawImageScanTime >= 1.0f || _cachedBackgroundRawImages.Count == 0)
-                {
-                    _lastRawImageScanTime = Time.time;
-                    _cachedBackgroundRawImages.Clear();
-                    
-                    foreach (var rawImg in Resources.FindObjectsOfTypeAll<RawImage>())
+                    if (!cfgMenuVideoMute.Value && _vanillaMenuMusic != null)
                     {
-                        if (rawImg != null && rawImg.gameObject != null)
-                        {
-                            string name = rawImg.gameObject.name;
-                            if (name.IndexOf("background", StringComparison.OrdinalIgnoreCase) >= 0)
-                            {
-                                _cachedBackgroundRawImages.Add(rawImg);
-                            }
-                        }
-                    }
-                }
-
-                // Ultra-fast array loop bypassing heap scans completely on hot frames!
-                for (int i = 0; i < _cachedBackgroundRawImages.Count; i++)
-                {
-                    var rawImg = _cachedBackgroundRawImages[i];
-                    if (rawImg != null && rawImg.texture != tex)
-                    {
-                        rawImg.texture = tex;
-                        rawImg.enabled = true;
+                        _vanillaMenuMusic.volume = 0f;
                     }
                 }
             }
-            catch { /* ignore */ }
         }
 
         private float ResolveMusicVolume01()
@@ -272,13 +235,14 @@ namespace MainMenuReplacerMod
                 _menuVideoAudioSource.enabled = false;
             }
             _isPlayingVideo = false;
-            Logger.LogInfo("[MainMenuReplacer] Playback stopped for non-menu scene.");
+            _isMenuSessionActive = false;
+            _currentMenuMediaPath = null;
+            Logger.LogInfo("[MainMenuReplacer] Playback stopped for non-menu scene. Session reset.");
         }
 
         private void OnSceneLoaded(Scene scene, LoadSceneMode mode)
         {
             _cachedBackgroundRawImages.Clear();
-            _lastRawImageScanTime = 0f;
 
             string sceneName = scene.name.ToLower();
             bool isMenuScene = sceneName.Contains("menu") || 
@@ -296,6 +260,16 @@ namespace MainMenuReplacerMod
             // Only initialize the media choice if we actually entered MainMenu natively.
             if (scene.name != "MainMenu")
                 return;
+
+            // Cache vanilla menu music
+            foreach (var src in Resources.FindObjectsOfTypeAll<AudioSource>())
+            {
+                if (src.clip != null && src.clip.name.IndexOf("Ignition", StringComparison.OrdinalIgnoreCase) >= 0)
+                {
+                    _vanillaMenuMusic = src;
+                    break;
+                }
+            }
 
             Logger.LogInfo("[MainMenuReplacer] MainMenu scene detected, applying playlist item.");
 
@@ -315,6 +289,9 @@ namespace MainMenuReplacerMod
             var media = ChooseNextMenuMedia();
             if (media == null) return; // No media found
 
+            _isMenuSessionActive = true;
+            _currentMenuMediaPath = media.Path;
+
             if (media.IsVideo)
             {
                 ApplyMenuVideo(target.gameObject, media.Path);
@@ -327,6 +304,16 @@ namespace MainMenuReplacerMod
 
         private MediaItem ChooseNextMenuMedia()
         {
+            if (_isMenuSessionActive && _currentMenuMediaPath != null)
+            {
+                Logger.LogInfo("[MainMenuReplacer] Resuming existing menu session seamlessly.");
+                return new MediaItem
+                {
+                    Path = _currentMenuMediaPath,
+                    IsVideo = VideoExts.Contains(Path.GetExtension(_currentMenuMediaPath).ToLowerInvariant())
+                };
+            }
+
             string folder = cfgMenuMediaFolder.Value;
             if (string.IsNullOrWhiteSpace(folder) || !Directory.Exists(folder))
                 return null;
@@ -360,11 +347,30 @@ namespace MainMenuReplacerMod
                         _menuBagIndex = 0;
                         _menuBag = Enumerable.Range(0, allFiles.Count).Select(i => i.ToString()).ToList();
                         Shuffle(_menuBag);
+
+                        // Ensure we never start with the first file (index 0) if there are other options
+                        if (_menuBag.Count > 1 && _menuBag[0] == "0")
+                        {
+                            string temp = _menuBag[0];
+                            _menuBag[0] = _menuBag[1];
+                            _menuBag[1] = temp;
+                        }
                     }
 
                     if (_menuBagIndex >= _menuBag.Count)
                     {
+                        string lastPlayed = _menuBag[_menuBag.Count - 1];
                         Shuffle(_menuBag);
+                        
+                        // Prevent the same file from playing twice in a row across bag resets
+                        if (_menuBag.Count > 1 && _menuBag[0] == lastPlayed)
+                        {
+                            // Swap first and second element
+                            string temp = _menuBag[0];
+                            _menuBag[0] = _menuBag[1];
+                            _menuBag[1] = temp;
+                        }
+                        
                         _menuBagIndex = 0;
                     }
 
@@ -379,7 +385,7 @@ namespace MainMenuReplacerMod
 
             return new MediaItem
             {
-                Path = selectedFile,
+                Path = "file://" + selectedFile.Replace("\\", "/"),
                 IsVideo = VideoExts.Contains(Path.GetExtension(selectedFile).ToLowerInvariant())
             };
         }
@@ -407,11 +413,11 @@ namespace MainMenuReplacerMod
             // Normalize target filename
             string targetFilename = !string.IsNullOrEmpty(videoPath) ? Path.GetFileName(videoPath).ToLower() : "";
 
-            // Check if we already have a globally playing video player with the same video filename!
-            if (_menuVideoPlayer != null && _menuVideoPlayer.isPlaying && _isPlayingVideo)
+            // Check if we already have a globally playing video player!
+            if (_menuVideoPlayer != null)
             {
                 string currentFilename = !string.IsNullOrEmpty(_menuVideoPlayer.url) ? Path.GetFileName(_menuVideoPlayer.url).ToLower().Replace("file://", "").Trim('/') : "";
-                if (currentFilename == targetFilename)
+                if (_isPlayingVideo && currentFilename == targetFilename)
                 {
                     if (cfgDebugLogging.Value)
                         Logger.LogInfo("[MainMenuReplacer] Video is already playing globally on persistent canvas. Skipping duplicate player to remain perfectly seamless!");
@@ -419,13 +425,33 @@ namespace MainMenuReplacerMod
                     var newImg = owner.GetComponent<Image>();
                     if (newImg != null) newImg.enabled = false;
                     
-                    // Make sure the running RenderTexture is instantly streamed to the new owner's raw images
-                    if (_menuVideoPlayer.targetTexture != null)
-                    {
-                        StreamToOtherCanvases(_menuVideoPlayer.targetTexture);
-                    }
                     return;
                 }
+                else
+                {
+                    if (cfgDebugLogging.Value)
+                        Logger.LogInfo($"[MainMenuReplacer] Switching video from {currentFilename} to {targetFilename}. Reusing existing VideoPlayer.");
+                    
+                    // Re-enable and reuse the player!
+                    if (_menuVideoAudioSource != null) _menuVideoAudioSource.enabled = true;
+                    _menuVideoPlayer.enabled = true;
+                    _menuVideoPlayer.Stop();
+                    _menuVideoPlayer.url = videoPath;
+                    _menuVideoPlayer.Play();
+                    _isPlayingVideo = true;
+                    
+                    var newImg = owner.GetComponent<Image>();
+                    if (newImg != null) newImg.enabled = false;
+                    return;
+                }
+            }
+
+            // Fix vanilla oversized background for perfect fit
+            var ownerRt = owner.GetComponent<RectTransform>();
+            if (ownerRt != null)
+            {
+                ownerRt.offsetMin = Vector2.zero;
+                ownerRt.offsetMax = Vector2.zero;
             }
 
             var existing = owner.transform.Find("MMR_VideoRoot");
@@ -434,14 +460,18 @@ namespace MainMenuReplacerMod
             {
                 root.transform.SetParent(owner.transform, false);
                 var rt = root.AddComponent<RectTransform>();
-                rt.anchorMin = Vector2.zero;
-                rt.anchorMax = Vector2.one;
+                rt.anchorMin = new Vector2(0.5f, 0.5f);
+                rt.anchorMax = new Vector2(0.5f, 0.5f);
+                rt.pivot = new Vector2(0.5f, 0.5f);
                 rt.offsetMin = Vector2.zero;
                 rt.offsetMax = Vector2.zero;
                 rt.localScale = Vector3.one;
             }
 
             var raw = root.GetComponent<RawImage>() ?? root.AddComponent<RawImage>();
+            var fitter = root.GetComponent<AspectRatioFitter>() ?? root.AddComponent<AspectRatioFitter>();
+            fitter.aspectMode = AspectRatioFitter.AspectMode.FitInParent;
+            fitter.aspectRatio = 1920f / 1080f;
             var audioSrc = root.GetComponent<AudioSource>() ?? root.AddComponent<AudioSource>();
             audioSrc.playOnAwake = false;
             audioSrc.loop = true;
@@ -480,9 +510,6 @@ namespace MainMenuReplacerMod
             audioSrc.volume = vol;
             vp.Stop();
             vp.Play();
-
-            // Stream right away on other canvases (SPcanvas and MPcanvas)
-            StreamToOtherCanvases(rtTex);
         }
 
         internal Sprite LoadSpriteFromFile(string path)
@@ -548,13 +575,17 @@ namespace MainMenuReplacerMod
                     {
                         go.transform.SetParent(img.transform, false);
                         var rt = go.AddComponent<RectTransform>();
-                        rt.anchorMin = Vector2.zero;
-                        rt.anchorMax = Vector2.one;
+                        rt.anchorMin = new Vector2(0.5f, 0.5f);
+                        rt.anchorMax = new Vector2(0.5f, 0.5f);
+                        rt.pivot = new Vector2(0.5f, 0.5f);
                         rt.offsetMin = Vector2.zero;
                         rt.offsetMax = Vector2.zero;
                     }
                     
                     var rawImg = go.GetComponent<RawImage>() ?? go.AddComponent<RawImage>();
+                    var fitter = go.GetComponent<AspectRatioFitter>() ?? go.AddComponent<AspectRatioFitter>();
+                    fitter.aspectMode = AspectRatioFitter.AspectMode.FitInParent;
+                    fitter.aspectRatio = 1920f / 1080f;
                     rawImg.name = "background"; // So StreamToOtherCanvases picks it up!
                     rawImg.texture = plugin._menuVideoPlayer.targetTexture;
                     rawImg.enabled = true;
