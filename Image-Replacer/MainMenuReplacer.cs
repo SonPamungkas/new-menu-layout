@@ -56,6 +56,7 @@ namespace MainMenuReplacerMod
         private string _currentMenuMediaPath = null;
         private bool _isMenuSessionActive = false;
         private AudioSource _vanillaMenuMusic;
+        private GameObject _currentMenuOwner;
 
         // Media items
         private class MediaItem
@@ -280,7 +281,6 @@ namespace MainMenuReplacerMod
                 img.rectTransform != null &&
                 img.rectTransform.anchorMin == Vector2.zero &&
                 img.rectTransform.anchorMax == Vector2.one).ToList();
-
             Image target = candidates.FirstOrDefault(c => c.gameObject.name.ToLower().Contains("background"))
                         ?? candidates.OrderBy(c => c.rectTransform.GetSiblingIndex()).FirstOrDefault();
 
@@ -299,6 +299,30 @@ namespace MainMenuReplacerMod
             else
             {
                 ApplyMenuImage(target, media.Path);
+            }
+        }
+
+        private void OnVideoEnd(VideoPlayer source)
+        {
+            if (source == _menuVideoPlayer && _currentMenuOwner != null)
+            {
+                _isMenuSessionActive = false;
+                var media = ChooseNextMenuMedia();
+                
+                if (media != null)
+                {
+                    _isMenuSessionActive = true;
+                    _currentMenuMediaPath = media.Path;
+                    if (media.IsVideo)
+                    {
+                        ApplyMenuVideo(_currentMenuOwner, media.Path);
+                    }
+                    else
+                    {
+                        ApplyMenuImage(_currentMenuOwner.GetComponent<Image>(), media.Path);
+                        StopMenuPlayback();
+                    }
+                }
             }
         }
 
@@ -437,6 +461,8 @@ namespace MainMenuReplacerMod
                     _menuVideoPlayer.enabled = true;
                     _menuVideoPlayer.Stop();
                     _menuVideoPlayer.url = videoPath;
+                    _menuVideoPlayer.loopPointReached -= OnVideoEnd;
+                    _menuVideoPlayer.loopPointReached += OnVideoEnd;
                     _menuVideoPlayer.Play();
                     _isPlayingVideo = true;
                     
@@ -453,6 +479,8 @@ namespace MainMenuReplacerMod
                 ownerRt.offsetMin = Vector2.zero;
                 ownerRt.offsetMax = Vector2.zero;
             }
+
+            _currentMenuOwner = owner;
 
             var existing = owner.transform.Find("MMR_VideoRoot");
             GameObject root = existing != null ? existing.gameObject : new GameObject("MMR_VideoRoot");
@@ -483,12 +511,14 @@ namespace MainMenuReplacerMod
             vp.enabled = true;
             vp.source = VideoSource.Url;
             vp.url = videoPath;
-            vp.isLooping = true;
+            vp.isLooping = false;
             vp.playOnAwake = false;
             vp.renderMode = VideoRenderMode.RenderTexture;
             vp.audioOutputMode = VideoAudioOutputMode.AudioSource;
             vp.EnableAudioTrack(0, true);
             vp.SetTargetAudioSource(0, audioSrc);
+            vp.loopPointReached -= OnVideoEnd;
+            vp.loopPointReached += OnVideoEnd;
 
             var rtTex = raw.texture as RenderTexture;
             if (rtTex == null)

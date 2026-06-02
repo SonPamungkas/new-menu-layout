@@ -489,8 +489,24 @@ namespace NewMenuLayoutMod
                     Logger.LogInfo("LeftPanel opacity set to 0.");
                 }
 
+                var lh = leftPanel.gameObject.GetComponent<HoverHideComponent>();
+                if (lh == null) lh = leftPanel.gameObject.AddComponent<HoverHideComponent>();
+                lh.area = HoverHideComponent.HoverArea.Left;
+                lh.hideOffset = new Vector2(-260f, 0f);
+
                 // Try to find Container and playerNameInput
                 Transform container = leftPanel.Find("Container");
+                if (container != null)
+                {
+                    var cImg = container.GetComponent<Image>();
+                    if (cImg != null)
+                    {
+                        var col = cImg.color;
+                        cImg.color = new Color(col.r, col.g, col.b, 0f);
+                        Logger.LogInfo("Container opacity set to 0.");
+                    }
+                }
+
                 Transform playerNameInput = leftPanel.Find("playerNameInput");
                 if (container != null && playerNameInput != null)
                 {
@@ -584,7 +600,7 @@ namespace NewMenuLayoutMod
 
     public class HoverHideComponent : MonoBehaviour
     {
-        public enum HoverArea { BottomLeft, BottomCenter, AnyBottom, TopRight }
+        public enum HoverArea { BottomLeft, BottomCenter, AnyBottom, TopRight, Left }
         public HoverArea area = HoverArea.BottomLeft;
         public Vector2 hideOffset = new Vector2(0, -300f);
 
@@ -626,6 +642,10 @@ namespace NewMenuLayoutMod
                 else if (area == HoverArea.AnyBottom)
                 {
                     near = (mousePos.y < Screen.height * 0.3f);
+                }
+                else if (area == HoverArea.Left)
+                {
+                    near = (mousePos.x < Screen.width * 0.35f);
                 }
             }
 
